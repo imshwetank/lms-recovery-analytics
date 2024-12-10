@@ -35,12 +35,13 @@ class LoanPassbookModel {
             $params[':branch'] = $filters['branch'];
         }
 
-        if ($filters['type'] !== null) {
+        if ($filters['type'] !== null && $filters['type'] !== '') {
             $where[] = "type = :type";
             $params[':type'] = $filters['type'];
         }
 
-        if ($filters['isOD'] !== null) {
+        // Only add IsOD condition if a specific value is selected
+        if ($filters['isOD'] !== null && $filters['isOD'] !== '') {
             $where[] = "IsOD = :isOD";
             $params[':isOD'] = $filters['isOD'];
         }
@@ -71,8 +72,9 @@ class LoanPassbookModel {
                     SUM(recovered_amt) as total_amount,
                     SUM(principal) as total_principal,
                     SUM(interest) as total_interest,
-                    SUM(CASE WHEN IsOD = 1 THEN recovered_amt ELSE 0 END) as od_recovery,
-                    SUM(CASE WHEN IsOD = 0 THEN recovered_amt ELSE 0 END) as regular_recovery
+                    SUM(CASE WHEN IsOD = 1 THEN recovered_amt ELSE 0 END) as od_recovered,
+                    SUM(CASE WHEN IsOD = 2 THEN recovered_amt ELSE 0 END) as od_unrecovered,
+                    SUM(CASE WHEN IsOD = 0 THEN recovered_amt ELSE 0 END) as normal_amount
                 FROM loan_passbook
                 WHERE " . implode(" AND ", $where) . "
                 GROUP BY $groupBy, branch_id

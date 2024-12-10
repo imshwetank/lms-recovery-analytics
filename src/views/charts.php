@@ -46,8 +46,9 @@
                 <label>OD Status:</label>
                 <select id="isOD" class="form-control">
                     <option value="">All</option>
-                    <option value="0">Regular</option>
-                    <option value="1">OD</option>
+                    <option value="0">Normal</option>
+                    <option value="1">OD Recovered</option>
+                    <option value="2">OD Unrecovered</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -93,8 +94,9 @@
                             <th>Arrear Recovery</th>
                             <th>Close Loans</th>
                             <th>Death Recovery</th>
-                            <th>Regular Recovery</th>
-                            <th>OD Recovery</th>
+                            <th>Normal Amount</th>
+                            <th>OD Recovered</th>
+                            <th>OD Unrecovered</th>
                             <th>Total Principal</th>
                             <th>Total Interest</th>
                             <th>Total Amount</th>
@@ -132,17 +134,24 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         $(document).ready(function() {
-            // Initialize date range picker
+            // Initialize date range picker with more options
             $('#daterange').daterangepicker({
-                startDate: moment().subtract(30, 'days'),
-                endDate: moment(),
+                startDate: moment().startOf('month'),
+                endDate: moment().endOf('month'),
                 ranges: {
                     'Today': [moment(), moment()],
                     'Yesterday': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
                     'Last 7 Days': [moment().subtract(6, 'days'), moment()],
                     'Last 30 Days': [moment().subtract(29, 'days'), moment()],
                     'This Month': [moment().startOf('month'), moment().endOf('month')],
-                    'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+                    'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')],
+                    'This Year': [moment().startOf('year'), moment().endOf('year')],
+                    'Last Year': [moment().subtract(1, 'year').startOf('year'), moment().subtract(1, 'year').endOf('year')],
+                    'Last 2 Years': [moment().subtract(2, 'year').startOf('year'), moment()],
+                    'Last 5 Years': [moment().subtract(5, 'year').startOf('year'), moment()]
+                },
+                locale: {
+                    format: 'DD-MM-YYYY'
                 }
             });
 
@@ -155,9 +164,9 @@
                     action: 'getData',
                     start_date: dateRange.startDate.format('YYYY-MM-DD'),
                     end_date: dateRange.endDate.format('YYYY-MM-DD'),
-                    branch: $('#branch').val(),
-                    type: $('#type').val(),
-                    isOD: $('#isOD').val(),
+                    branch: $('#branch').val() || null,
+                    type: $('#type').val() || null,
+                    isOD: $('#isOD').val() || null,
                     period: $('#period').val()
                 }, function(data) {
                     updateChartsWithData(data);
@@ -168,14 +177,15 @@
             function updateChartsWithData(data) {
                 const labels = data.map(d => d.period);
                 const datasets = [
-                    { label: 'Normal Recovery', data: data.map(d => d.normal_recovery), borderColor: '#4CAF50' },
-                    { label: 'Advance Recovery', data: data.map(d => d.advance_recovery), borderColor: '#2196F3' },
-                    { label: 'OS Recovery', data: data.map(d => d.os_recovery), borderColor: '#FFC107' },
-                    { label: 'Arrear Recovery', data: data.map(d => d.arrear_recovery), borderColor: '#FF5722' },
-                    { label: 'Close Loans', data: data.map(d => d.close_loans), borderColor: '#9C27B0' },
-                    { label: 'Death Recovery', data: data.map(d => d.death_recovery), borderColor: '#795548' }
+                    { label: 'Normal Recovery', data: data.map(d => parseFloat(d.normal_recovery) || 0), borderColor: '#4CAF50' },
+                    { label: 'Advance Recovery', data: data.map(d => parseFloat(d.advance_recovery) || 0), borderColor: '#2196F3' },
+                    { label: 'OS Recovery', data: data.map(d => parseFloat(d.os_recovery) || 0), borderColor: '#FFC107' },
+                    { label: 'Arrear Recovery', data: data.map(d => parseFloat(d.arrear_recovery) || 0), borderColor: '#FF5722' },
+                    { label: 'Close Loans', data: data.map(d => parseFloat(d.close_loans) || 0), borderColor: '#9C27B0' },
+                    { label: 'Death Recovery', data: data.map(d => parseFloat(d.death_recovery) || 0), borderColor: '#795548' }
                 ];
 
+                // Destroy existing charts if they exist
                 if (recoveryChart) recoveryChart.destroy();
                 if (trendChart) trendChart.destroy();
 
@@ -192,6 +202,20 @@
                             title: {
                                 display: true,
                                 text: 'Recovery Distribution'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return new Intl.NumberFormat('en-IN', {
+                                            style: 'currency',
+                                            currency: 'INR',
+                                            maximumSignificantDigits: 3
+                                        }).format(value);
+                                    }
+                                }
                             }
                         }
                     }
@@ -210,6 +234,20 @@
                             title: {
                                 display: true,
                                 text: 'Recovery Trends'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return new Intl.NumberFormat('en-IN', {
+                                            style: 'currency',
+                                            currency: 'INR',
+                                            maximumSignificantDigits: 3
+                                        }).format(value);
+                                    }
+                                }
                             }
                         }
                     }
@@ -230,8 +268,9 @@
                             <td>${formatAmount(row.arrear_recovery)}</td>
                             <td>${formatAmount(row.close_loans)}</td>
                             <td>${formatAmount(row.death_recovery)}</td>
-                            <td>${formatAmount(row.regular_recovery)}</td>
-                            <td>${formatAmount(row.od_recovery)}</td>
+                            <td>${formatAmount(row.normal_amount)}</td>
+                            <td>${formatAmount(row.od_recovered)}</td>
+                            <td>${formatAmount(row.od_unrecovered)}</td>
                             <td>${formatAmount(row.total_principal)}</td>
                             <td>${formatAmount(row.total_interest)}</td>
                             <td>${formatAmount(row.total_amount)}</td>
