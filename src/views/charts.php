@@ -176,13 +176,58 @@
 
             function updateChartsWithData(data) {
                 const labels = data.map(d => d.period);
+                const chartColors = {
+                    normal: { bg: '#4CAF50', border: '#388E3C' },
+                    advance: { bg: '#2196F3', border: '#1976D2' },
+                    os: { bg: '#FFC107', border: '#FFA000' },
+                    arrear: { bg: '#FF5722', border: '#E64A19' },
+                    close: { bg: '#9C27B0', border: '#7B1FA2' },
+                    death: { bg: '#795548', border: '#5D4037' }
+                };
+
                 const datasets = [
-                    { label: 'Normal Recovery', data: data.map(d => parseFloat(d.normal_recovery) || 0), borderColor: '#4CAF50' },
-                    { label: 'Advance Recovery', data: data.map(d => parseFloat(d.advance_recovery) || 0), borderColor: '#2196F3' },
-                    { label: 'OS Recovery', data: data.map(d => parseFloat(d.os_recovery) || 0), borderColor: '#FFC107' },
-                    { label: 'Arrear Recovery', data: data.map(d => parseFloat(d.arrear_recovery) || 0), borderColor: '#FF5722' },
-                    { label: 'Close Loans', data: data.map(d => parseFloat(d.close_loans) || 0), borderColor: '#9C27B0' },
-                    { label: 'Death Recovery', data: data.map(d => parseFloat(d.death_recovery) || 0), borderColor: '#795548' }
+                    { 
+                        label: 'Normal Recovery',
+                        data: data.map(d => parseFloat(d.normal_recovery) || 0),
+                        backgroundColor: chartColors.normal.bg,
+                        borderColor: chartColors.normal.border,
+                        borderWidth: 1
+                    },
+                    { 
+                        label: 'Advance Recovery',
+                        data: data.map(d => parseFloat(d.advance_recovery) || 0),
+                        backgroundColor: chartColors.advance.bg,
+                        borderColor: chartColors.advance.border,
+                        borderWidth: 1
+                    },
+                    { 
+                        label: 'OS Recovery',
+                        data: data.map(d => parseFloat(d.os_recovery) || 0),
+                        backgroundColor: chartColors.os.bg,
+                        borderColor: chartColors.os.border,
+                        borderWidth: 1
+                    },
+                    { 
+                        label: 'Arrear Recovery',
+                        data: data.map(d => parseFloat(d.arrear_recovery) || 0),
+                        backgroundColor: chartColors.arrear.bg,
+                        borderColor: chartColors.arrear.border,
+                        borderWidth: 1
+                    },
+                    { 
+                        label: 'Close Loans',
+                        data: data.map(d => parseFloat(d.close_loans) || 0),
+                        backgroundColor: chartColors.close.bg,
+                        borderColor: chartColors.close.border,
+                        borderWidth: 1
+                    },
+                    { 
+                        label: 'Death Recovery',
+                        data: data.map(d => parseFloat(d.death_recovery) || 0),
+                        backgroundColor: chartColors.death.bg,
+                        borderColor: chartColors.death.border,
+                        borderWidth: 1
+                    }
                 ];
 
                 // Destroy existing charts if they exist
@@ -194,18 +239,33 @@
                     type: 'bar',
                     data: {
                         labels: labels,
-                        datasets: datasets.map(d => ({...d, type: 'bar'}))
+                        datasets: datasets
                     },
                     options: {
                         responsive: true,
                         plugins: {
                             title: {
                                 display: true,
-                                text: 'Recovery Distribution'
+                                text: 'Recovery Distribution',
+                                font: {
+                                    size: 16,
+                                    weight: 'bold'
+                                }
+                            },
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    usePointStyle: true,
+                                    padding: 20
+                                }
                             }
                         },
                         scales: {
+                            x: {
+                                stacked: true
+                            },
                             y: {
+                                stacked: true,
                                 beginAtZero: true,
                                 ticks: {
                                     callback: function(value) {
@@ -226,14 +286,32 @@
                     type: 'line',
                     data: {
                         labels: labels,
-                        datasets: datasets
+                        datasets: datasets.map(d => ({
+                            ...d,
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            fill: false
+                        }))
                     },
                     options: {
                         responsive: true,
                         plugins: {
                             title: {
                                 display: true,
-                                text: 'Recovery Trends'
+                                text: 'Recovery Trends',
+                                font: {
+                                    size: 16,
+                                    weight: 'bold'
+                                }
+                            },
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    usePointStyle: true,
+                                    padding: 20
+                                }
                             }
                         },
                         scales: {
