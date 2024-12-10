@@ -3,9 +3,9 @@ DB_NAME=u704466700_deepak
 DB_USER=u704466700_deepak
 DB_PASS=PA$$w0rd2326
 
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your_email@gmail.com
-SMTP_PASSWORD=your_app_password
-SMTP_FROM=your_email@gmail.com
+SMTP_HOST=smtp.hostinger.com
+SMTP_PORT=465
+SMTP_USERNAME=report@mics.asia
+SMTP_PASSWORD=PA$$w0rd2326
+SMTP_FROM=report@mics.asia
 SMTP_FROM_NAME="LMS Recovery Analytics"
