@@ -79,6 +79,18 @@
                 <canvas id="trendChart"></canvas>
             </div>
         </div>
+        <div class="row">
+            <div class="col-md-12 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Recovery Summary</h5>
+                        <div id="summaryStats" class="row mt-3">
+                            <!-- Will be filled by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Summary Table -->
         <div class="row">
@@ -175,62 +187,118 @@
             }
 
             function updateChartsWithData(data) {
-                const labels = data.map(d => d.period);
+                const period = $('#period').val();
+                const labels = data.map(d => {
+                    switch(period) {
+                        case 'yearly':
+                            return d.period; // Already in YYYY format from SQL
+                        case 'monthly':
+                            // Convert YYYY-MM to MMM YYYY
+                            return moment(d.period + '-01').format('MMM YYYY');
+                        case 'weekly':
+                            // Convert YYYYWW to date range
+                            const weekYear = d.period.toString();
+                            const year = weekYear.substring(0, 4);
+                            const week = weekYear.substring(4);
+                            const startOfWeek = moment().year(year).week(week).startOf('week');
+                            const endOfWeek = moment().year(year).week(week).endOf('week');
+                            return `${startOfWeek.format('DD MMM')} - ${endOfWeek.format('DD MMM YYYY')}`;
+                        default:
+                            // Daily - convert YYYY-MM-DD to DD MMM YYYY
+                            return moment(d.period).format('DD MMM YYYY');
+                    }
+                });
+
+                // Calculate totals for summary
+                const totals = {
+                    normal: data.reduce((sum, d) => sum + (parseFloat(d.normal_recovery) || 0), 0),
+                    advance: data.reduce((sum, d) => sum + (parseFloat(d.advance_recovery) || 0), 0),
+                    os: data.reduce((sum, d) => sum + (parseFloat(d.os_recovery) || 0), 0),
+                    arrear: data.reduce((sum, d) => sum + (parseFloat(d.arrear_recovery) || 0), 0),
+                    close: data.reduce((sum, d) => sum + (parseFloat(d.close_loans) || 0), 0),
+                    death: data.reduce((sum, d) => sum + (parseFloat(d.death_recovery) || 0), 0)
+                };
+
+                const totalAmount = Object.values(totals).reduce((a, b) => a + b, 0);
+                const totalTransactions = data.reduce((sum, d) => sum + parseInt(d.total_transactions || 0), 0);
+
+                // Update summary stats
+                $('#summaryStats').html(`
+                    <div class="col-4 mb-3">
+                        <strong>Total Recovery:</strong><br>
+                        ${formatAmount(totalAmount)}
+                    </div>
+                    <div class="col-4 mb-3">
+                        <strong>Total Transactions:</strong><br>
+                        ${totalTransactions}
+                    </div>
+                    <div class="col-4 mb-3">
+                        <strong>OD Recovered:</strong><br>
+                        ${formatAmount(data.reduce((sum, d) => sum + (parseFloat(d.od_recovered) || 0), 0))}
+                    </div>
+                    ${Object.entries(totals).map(([key, value]) => `
+                        <div class="col-4 mb-2">
+                            <strong>${key.charAt(0).toUpperCase() + key.slice(1)}:</strong><br>
+                            ${formatAmount(value)} (${((value/totalAmount)*100).toFixed(1)}%)
+                        </div>
+                    `).join('')}
+                `);
+
                 const chartColors = {
-                    normal: { bg: '#4CAF50', border: '#388E3C' },
-                    advance: { bg: '#2196F3', border: '#1976D2' },
-                    os: { bg: '#FFC107', border: '#FFA000' },
-                    arrear: { bg: '#FF5722', border: '#E64A19' },
-                    close: { bg: '#9C27B0', border: '#7B1FA2' },
-                    death: { bg: '#795548', border: '#5D4037' }
+                    normal: '#4CAF50',
+                    advance: '#2196F3',
+                    os: '#FFC107',
+                    arrear: '#FF5722',
+                    close: '#9C27B0',
+                    death: '#795548'
                 };
 
                 const datasets = [
-                    { 
+                    {
                         label: 'Normal Recovery',
                         data: data.map(d => parseFloat(d.normal_recovery) || 0),
-                        backgroundColor: chartColors.normal.bg,
-                        borderColor: chartColors.normal.border,
+                        backgroundColor: chartColors.normal,
+                        borderColor: chartColors.normal,
                         borderWidth: 1
                     },
-                    { 
+                    {
                         label: 'Advance Recovery',
                         data: data.map(d => parseFloat(d.advance_recovery) || 0),
-                        backgroundColor: chartColors.advance.bg,
-                        borderColor: chartColors.advance.border,
+                        backgroundColor: chartColors.advance,
+                        borderColor: chartColors.advance,
                         borderWidth: 1
                     },
-                    { 
+                    {
                         label: 'OS Recovery',
                         data: data.map(d => parseFloat(d.os_recovery) || 0),
-                        backgroundColor: chartColors.os.bg,
-                        borderColor: chartColors.os.border,
+                        backgroundColor: chartColors.os,
+                        borderColor: chartColors.os,
                         borderWidth: 1
                     },
-                    { 
+                    {
                         label: 'Arrear Recovery',
                         data: data.map(d => parseFloat(d.arrear_recovery) || 0),
-                        backgroundColor: chartColors.arrear.bg,
-                        borderColor: chartColors.arrear.border,
+                        backgroundColor: chartColors.arrear,
+                        borderColor: chartColors.arrear,
                         borderWidth: 1
                     },
-                    { 
+                    {
                         label: 'Close Loans',
                         data: data.map(d => parseFloat(d.close_loans) || 0),
-                        backgroundColor: chartColors.close.bg,
-                        borderColor: chartColors.close.border,
+                        backgroundColor: chartColors.close,
+                        borderColor: chartColors.close,
                         borderWidth: 1
                     },
-                    { 
+                    {
                         label: 'Death Recovery',
                         data: data.map(d => parseFloat(d.death_recovery) || 0),
-                        backgroundColor: chartColors.death.bg,
-                        borderColor: chartColors.death.border,
+                        backgroundColor: chartColors.death,
+                        borderColor: chartColors.death,
                         borderWidth: 1
                     }
                 ];
 
-                // Destroy existing charts if they exist
+                // Destroy existing charts
                 if (recoveryChart) recoveryChart.destroy();
                 if (trendChart) trendChart.destroy();
 
@@ -247,34 +315,26 @@
                             title: {
                                 display: true,
                                 text: 'Recovery Distribution',
-                                font: {
-                                    size: 16,
-                                    weight: 'bold'
-                                }
+                                font: { size: 16, weight: 'bold' }
                             },
                             legend: {
                                 position: 'bottom',
-                                labels: {
-                                    usePointStyle: true,
-                                    padding: 20
-                                }
+                                labels: { usePointStyle: true, padding: 20 }
                             }
                         },
                         scales: {
                             x: {
-                                stacked: true
+                                stacked: true,
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45
+                                }
                             },
                             y: {
                                 stacked: true,
                                 beginAtZero: true,
                                 ticks: {
-                                    callback: function(value) {
-                                        return new Intl.NumberFormat('en-IN', {
-                                            style: 'currency',
-                                            currency: 'INR',
-                                            maximumSignificantDigits: 3
-                                        }).format(value);
-                                    }
+                                    callback: value => formatAmount(value)
                                 }
                             }
                         }
@@ -288,7 +348,6 @@
                         labels: labels,
                         datasets: datasets.map(d => ({
                             ...d,
-                            backgroundColor: 'transparent',
                             borderWidth: 2,
                             pointRadius: 4,
                             pointHoverRadius: 6,
@@ -301,30 +360,24 @@
                             title: {
                                 display: true,
                                 text: 'Recovery Trends',
-                                font: {
-                                    size: 16,
-                                    weight: 'bold'
-                                }
+                                font: { size: 16, weight: 'bold' }
                             },
                             legend: {
                                 position: 'bottom',
-                                labels: {
-                                    usePointStyle: true,
-                                    padding: 20
-                                }
+                                labels: { usePointStyle: true, padding: 20 }
                             }
                         },
                         scales: {
+                            x: {
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45
+                                }
+                            },
                             y: {
                                 beginAtZero: true,
                                 ticks: {
-                                    callback: function(value) {
-                                        return new Intl.NumberFormat('en-IN', {
-                                            style: 'currency',
-                                            currency: 'INR',
-                                            maximumSignificantDigits: 3
-                                        }).format(value);
-                                    }
+                                    callback: value => formatAmount(value)
                                 }
                             }
                         }
