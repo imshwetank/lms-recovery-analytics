@@ -1,0 +1,19 @@
+{
+    "name": "shwet/lms-recovery-analytics-report",
+    "autoload": {
+        "psr-4": {
+            "Shwet\\LmsRecoveryAnalyticsReport\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "hiShwetank",
+            "email": "shwetank@shwetank.co.in"
+        }
+    ],
+    "require": {
+        "phpmailer/phpmailer": "^6.9",
+        "phpoffice/phpspreadsheet": "^1.19",
+        "vlucas/phpdotenv": "^5.5"
+    }
+}
