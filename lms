@@ -7,7 +7,7 @@ $command = $argv[1] ?? 'serve';
 
 switch ($command) {
     case 'serve':
-        $host = $argv[2] ?? 'localhost:8000';
+        $host = $argv[2] ?? 'localhost:80';
         echo "Starting development server on http://{$host}\n";
         shell_exec("php -S {$host} -t public");
         break;

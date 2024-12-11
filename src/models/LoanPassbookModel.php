@@ -1,13 +1,25 @@
 <?php
+require_once __DIR__ . '/../controllers/AuthController.php';
+
 class LoanPassbookModel {
     private $pdo;
+    private $auth;
 
     public function __construct() {
+        $this->auth = new AuthController();
+        
+        // Get verified connection
+        $connection = $this->auth->getCurrentConnection();
+        if (!$connection) {
+            header('Location: /verify.php');
+            exit;
+        }
+        
         try {
             $this->pdo = new PDO(
-                "mysql:host={$_ENV['DB_HOST']};dbname={$_ENV['DB_NAME']}",
-                $_ENV['DB_USER'],
-                $_ENV['DB_PASS'],
+                "mysql:host={$connection['host']};dbname={$connection['database_name']}",
+                $connection['username'],
+                $connection['password'],
                 [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
             );
         } catch (PDOException $e) {
