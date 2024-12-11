@@ -2,7 +2,8 @@
     "name": "shwet/lms-recovery-analytics-report",
     "autoload": {
         "psr-4": {
-            "Shwet\\LmsRecoveryAnalyticsReport\\": "src/"
+            "App\\": "src/",
+            "Core\\": "src/core/"
         }
     },
     "authors": [

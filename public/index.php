@@ -1,38 +1,40 @@
 <?php
-require_once __DIR__ . '/../vendor/autoload.php';
 
-use Dotenv\Dotenv;
-$dotenv = Dotenv::createImmutable(__DIR__ . '/..');
+// Define base path
+define('BASEPATH', dirname(__DIR__));
+
+// Load composer autoloader
+require_once BASEPATH . '/vendor/autoload.php';
+
+// Load helper functions
+require_once BASEPATH . '/src/helpers/functions.php';
+
+// Load environment variables
+$dotenv = Dotenv\Dotenv::createImmutable(BASEPATH);
 $dotenv->load();
 
+// Start session
 session_start();
 
-// Route handling
-$controller = $_GET['controller'] ?? 'chart';
-$action = $_GET['action'] ?? 'index';
+// Load configuration
+require_once BASEPATH . '/src/config/config.php';
 
-// Load appropriate controller
-switch ($controller) {
-    case 'chart':
-        require_once __DIR__ . '/../src/controllers/ChartController.php';
-        $chartController = new ChartController();
-        if ($action === 'getData') {
-            $chartController->getData();
-        } else {
-            $chartController->index();
-        }
-        break;
-    case 'export':
-        require_once __DIR__ . '/../src/controllers/ExportController.php';
-        $exportController = new ExportController();
-        $exportController->exportToExcel();
-        break;
-    case 'email':
-        require_once __DIR__ . '/../src/controllers/EmailController.php';
-        $emailController = new EmailController();
-        $emailController->sendEmail();
-        break;
-    default:
-        header('Location: ?controller=chart');
-        break;
+// Get the request method and URI
+$method = $_SERVER['REQUEST_METHOD'];
+$uri = $_SERVER['REQUEST_URI'];
+
+try {
+    // Dispatch the request and echo the response
+    $router = Core\Router::getInstance();
+    $response = $router->dispatch($method, $uri);
+    echo $response;
+} catch (Exception $e) {
+    // Handle errors
+    if ($e->getCode() === 404) {
+        http_response_code(404);
+        require BASEPATH . '/src/views/errors/404.php';
+    } else {
+        http_response_code(500);
+        require BASEPATH . '/src/views/errors/500.php';
+    }
 }

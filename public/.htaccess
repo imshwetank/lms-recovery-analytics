@@ -1,0 +1,14 @@
+RewriteEngine On
+
+# Handle Authorization Header
+SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+
+# Remove .php extension from URLs
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^([^\.]+)$ $1.php [NC,L]
+
+# Handle requests for non-existent files/directories
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]

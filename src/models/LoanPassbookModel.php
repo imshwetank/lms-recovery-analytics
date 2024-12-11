@@ -1,99 +1,177 @@
 <?php
-require_once __DIR__ . '/../controllers/AuthController.php';
 
-class LoanPassbookModel {
-    private $pdo;
-    private $auth;
+namespace Models;
 
-    public function __construct() {
-        $this->auth = new AuthController();
-        
-        // Get verified connection
-        $connection = $this->auth->getCurrentConnection();
-        if (!$connection) {
-            header('Location: /verify.php');
-            exit;
-        }
-        
-        try {
-            $this->pdo = new PDO(
-                "mysql:host={$connection['host']};dbname={$connection['database_name']}",
-                $connection['username'],
-                $connection['password'],
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-            );
-        } catch (PDOException $e) {
-            die("Connection failed: " . $e->getMessage());
-        }
-    }
+use Core\Model;
+
+class LoanPassbookModel extends Model {
+    protected $table = 'loan_passbook';
+    protected $primaryKey = 'id';
 
     public function getBranches() {
-        $stmt = $this->pdo->query("SELECT DISTINCT branch_id FROM loan_passbook ORDER BY branch_id");
-        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+        // Get branches from both databases
+        $db1Branches = $this->useConnection('db1')
+            ->raw("SELECT DISTINCT branch_id FROM {$this->table}")
+            ->fetchAll();
+
+        $db2Branches = $this->useConnection('db2')
+            ->raw("SELECT DISTINCT branch_id FROM {$this->table}")
+            ->fetchAll();
+
+        // Merge and unique branches
+        $branches = array_merge($db1Branches, $db2Branches);
+        $branches = array_unique(array_column($branches, 'branch_id'));
+        sort($branches);
+
+        return $branches;
     }
 
     public function getFilteredData($filters) {
-        $where = ["1=1"];
         $params = [];
+        $where = [];
 
-        if ($filters['start_date'] && $filters['end_date']) {
-            $where[] = "recovery_date BETWEEN :start_date AND :end_date";
-            $params[':start_date'] = $filters['start_date'];
-            $params[':end_date'] = $filters['end_date'];
+        // Build WHERE clause
+        if (!empty($filters['branch'])) {
+            $where[] = "branch_id = ?";
+            $params[] = $filters['branch'];
         }
 
-        if ($filters['branch']) {
-            $where[] = "branch_id = :branch";
-            $params[':branch'] = $filters['branch'];
+        if (!empty($filters['type'])) {
+            $where[] = "recovery_type = ?";
+            $params[] = $filters['type'];
         }
 
-        if ($filters['type'] !== null && $filters['type'] !== '') {
-            $where[] = "type = :type";
-            $params[':type'] = $filters['type'];
+        if (isset($filters['isOD'])) {
+            $where[] = "is_od = ?";
+            $params[] = $filters['isOD'];
         }
 
-        // Only add IsOD condition if a specific value is selected
-        if ($filters['isOD'] !== null && $filters['isOD'] !== '') {
-            $where[] = "IsOD = :isOD";
-            $params[':isOD'] = $filters['isOD'];
+        // Add date range
+        if (!empty($filters['start_date'])) {
+            $where[] = "date >= ?";
+            $params[] = $filters['start_date'];
         }
 
-        $groupBy = "DATE(recovery_date)";
-        switch ($filters['period']) {
-            case 'weekly':
-                $groupBy = "YEARWEEK(recovery_date)";
-                break;
-            case 'monthly':
-                $groupBy = "DATE_FORMAT(recovery_date, '%Y-%m')";
-                break;
+        if (!empty($filters['end_date'])) {
+            $where[] = "date <= ?";
+            $params[] = $filters['end_date'];
+        }
+
+        $whereClause = !empty($where) ? "WHERE " . implode(" AND ", $where) : "";
+
+        // Group by clause based on period
+        $groupBy = $this->getGroupByClause($filters['period']);
+
+        // Get data from both databases
+        $sql = "
+            SELECT 
+                {$groupBy['select']},
+                COUNT(*) as total_transactions,
+                SUM(CASE WHEN recovery_type = 1 THEN amount ELSE 0 END) as normal_recovery,
+                SUM(CASE WHEN recovery_type = 2 THEN amount ELSE 0 END) as advance_recovery,
+                SUM(CASE WHEN recovery_type = 3 THEN amount ELSE 0 END) as os_recovery,
+                SUM(CASE WHEN recovery_type = 4 THEN amount ELSE 0 END) as arrear_recovery,
+                SUM(CASE WHEN recovery_type = 5 THEN amount ELSE 0 END) as close_loans,
+                SUM(CASE WHEN recovery_type = 6 THEN amount ELSE 0 END) as death_recovery,
+                SUM(CASE WHEN is_od = 1 THEN amount ELSE 0 END) as od_recovered,
+                SUM(CASE WHEN is_od = 2 THEN amount ELSE 0 END) as od_unrecovered,
+                SUM(principal) as total_principal,
+                SUM(interest) as total_interest,
+                SUM(amount) as total_amount
+            FROM {$this->table}
+            {$whereClause}
+            GROUP BY {$groupBy['groupBy']}
+            ORDER BY {$groupBy['orderBy']}
+        ";
+
+        // Get data from both databases
+        $db1Data = $this->useConnection('db1')->raw($sql, $params)->fetchAll();
+        $db2Data = $this->useConnection('db2')->raw($sql, $params)->fetchAll();
+
+        // Merge and process data
+        return $this->mergeAndProcessData($db1Data, $db2Data, $groupBy['period']);
+    }
+
+    private function getGroupByClause($period) {
+        switch ($period) {
             case 'yearly':
-                $groupBy = "YEAR(recovery_date)";
-                break;
+                return [
+                    'select' => "YEAR(date) as period",
+                    'groupBy' => "YEAR(date)",
+                    'orderBy' => "YEAR(date)",
+                    'period' => 'yearly'
+                ];
+            case 'monthly':
+                return [
+                    'select' => "DATE_FORMAT(date, '%Y-%m') as period",
+                    'groupBy' => "DATE_FORMAT(date, '%Y-%m')",
+                    'orderBy' => "DATE_FORMAT(date, '%Y-%m')",
+                    'period' => 'monthly'
+                ];
+            case 'weekly':
+                return [
+                    'select' => "CONCAT(YEAR(date), LPAD(WEEK(date), 2, '0')) as period",
+                    'groupBy' => "YEAR(date), WEEK(date)",
+                    'orderBy' => "YEAR(date), WEEK(date)",
+                    'period' => 'weekly'
+                ];
+            default: // daily
+                return [
+                    'select' => "DATE(date) as period",
+                    'groupBy' => "DATE(date)",
+                    'orderBy' => "DATE(date)",
+                    'period' => 'daily'
+                ];
+        }
+    }
+
+    private function mergeAndProcessData($db1Data, $db2Data, $period) {
+        $mergedData = [];
+
+        // Process DB1 data
+        foreach ($db1Data as $row) {
+            $period = $row['period'];
+            if (!isset($mergedData[$period])) {
+                $mergedData[$period] = $row;
+            } else {
+                $this->addValues($mergedData[$period], $row);
+            }
         }
 
-        $sql = "SELECT 
-                    $groupBy as period,
-                    branch_id,
-                    SUM(CASE WHEN type = 1 THEN recovered_amt ELSE 0 END) as normal_recovery,
-                    SUM(CASE WHEN type = 2 THEN recovered_amt ELSE 0 END) as advance_recovery,
-                    SUM(CASE WHEN type = 3 THEN recovered_amt ELSE 0 END) as os_recovery,
-                    SUM(CASE WHEN type = 4 THEN recovered_amt ELSE 0 END) as arrear_recovery,
-                    SUM(CASE WHEN type = 5 THEN recovered_amt ELSE 0 END) as close_loans,
-                    SUM(CASE WHEN type = 6 THEN recovered_amt ELSE 0 END) as death_recovery,
-                    COUNT(*) as total_transactions,
-                    SUM(recovered_amt) as total_amount,
-                    SUM(principal) as total_principal,
-                    SUM(interest) as total_interest,
-                    SUM(CASE WHEN IsOD = 1 THEN recovered_amt ELSE 0 END) as od_recovered,
-                    SUM(CASE WHEN IsOD = 2 THEN recovered_amt ELSE 0 END) as od_unrecovered,
-                    SUM(CASE WHEN IsOD = 0 THEN recovered_amt ELSE 0 END) as normal_amount
-                FROM loan_passbook
-                WHERE " . implode(" AND ", $where) . "
-                GROUP BY $groupBy, branch_id
-                ORDER BY period, branch_id";
+        // Process DB2 data
+        foreach ($db2Data as $row) {
+            $period = $row['period'];
+            if (!isset($mergedData[$period])) {
+                $mergedData[$period] = $row;
+            } else {
+                $this->addValues($mergedData[$period], $row);
+            }
+        }
 
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // Sort by period
+        ksort($mergedData);
+
+        return array_values($mergedData);
+    }
+
+    private function addValues(&$target, $source) {
+        $fieldsToAdd = [
+            'total_transactions',
+            'normal_recovery',
+            'advance_recovery',
+            'os_recovery',
+            'arrear_recovery',
+            'close_loans',
+            'death_recovery',
+            'od_recovered',
+            'od_unrecovered',
+            'total_principal',
+            'total_interest',
+            'total_amount'
+        ];
+
+        foreach ($fieldsToAdd as $field) {
+            $target[$field] += $source[$field];
+        }
     }
 }
