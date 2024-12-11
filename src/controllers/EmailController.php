@@ -1,89 +1,89 @@
 <?php
-require_once __DIR__ . '/../models/LoanPassbookModel.php';
 use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
 
 class EmailController {
-    private $model;
+    private $mailer;
 
     public function __construct() {
-        $this->model = new LoanPassbookModel();
+        $this->initializeMailer();
     }
 
-    public function sendEmail() {
-        if (!filter_var($_POST['email'], FILTER_VALIDATE_EMAIL)) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Invalid email address']);
-            exit;
-        }
-
-        $filters = [
-            'start_date' => $_POST['start_date'] ?? null,
-            'end_date' => $_POST['end_date'] ?? null,
-            'branch' => $_POST['branch'] ?? null,
-            'type' => $_POST['type'] ?? null,
-            'isOD' => $_POST['isOD'] ?? null,
-            'period' => 'daily'
-        ];
-
-        $data = $this->model->getFilteredData($filters);
-        
-        // Create HTML table for email
-        $table = '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse;">';
-        $table .= '<tr style="background-color: #f2f2f2;">';
-        $table .= '<th>Period</th>';
-        $table .= '<th>Normal Recovery</th>';
-        $table .= '<th>Advance Recovery</th>';
-        $table .= '<th>OS Recovery</th>';
-        $table .= '<th>Arrear Recovery</th>';
-        $table .= '<th>Close Loans</th>';
-        $table .= '<th>Death Recovery</th>';
-        $table .= '<th>Total Transactions</th>';
-        $table .= '</tr>';
-
-        foreach ($data as $row) {
-            $table .= '<tr>';
-            $table .= "<td>{$row['period']}</td>";
-            $table .= "<td>{$row['normal_recovery']}</td>";
-            $table .= "<td>{$row['advance_recovery']}</td>";
-            $table .= "<td>{$row['os_recovery']}</td>";
-            $table .= "<td>{$row['arrear_recovery']}</td>";
-            $table .= "<td>{$row['close_loans']}</td>";
-            $table .= "<td>{$row['death_recovery']}</td>";
-            $table .= "<td>{$row['total_transactions']}</td>";
-            $table .= '</tr>';
-        }
-        $table .= '</table>';
-
-        $mail = new PHPMailer(true);
-
+    private function initializeMailer() {
         try {
-            $mail->isSMTP();
-            $mail->Host = $_ENV['SMTP_HOST'];
-            $mail->SMTPAuth = true;
-            $mail->Username = $_ENV['SMTP_USERNAME'];
-            $mail->Password = $_ENV['SMTP_PASSWORD'];
-            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-            $mail->Port = $_ENV['SMTP_PORT'];
-
-            $mail->setFrom($_ENV['SMTP_FROM'], $_ENV['SMTP_FROM_NAME']);
-            $mail->addAddress($_POST['email']);
-
-            $mail->isHTML(true);
-            $mail->Subject = 'LMS Recovery Analytics Report';
+            $this->mailer = new PHPMailer(true);
             
-            $body = '<h2>LMS Recovery Analytics Report</h2>';
-            $body .= "<p>Period: {$filters['start_date']} to {$filters['end_date']}</p>";
-            if ($filters['branch']) $body .= "<p>Branch: {$filters['branch']}</p>";
-            $body .= $table;
+            // Debug output
+            $this->mailer->SMTPDebug = SMTP::DEBUG_SERVER;
+            $this->mailer->Debugoutput = function($str, $level) {
+                error_log("PHPMailer Debug: $str");
+            };
 
-            $mail->Body = $body;
-
-            $mail->send();
-            echo json_encode(['success' => true]);
+            // Server settings
+            $this->mailer->isSMTP();
+            $this->mailer->Host = $_ENV['SMTP_HOST'];        // smtp.hostinger.com
+            $this->mailer->SMTPAuth = true;
+            $this->mailer->Username = $_ENV['SMTP_USERNAME']; // report@mics.asia
+            $this->mailer->Password = $_ENV['SMTP_PASSWORD']; // PA$$w0rd2326
+            $this->mailer->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+            $this->mailer->Port = 465;
+            
+            // Default settings
+            $this->mailer->setFrom($_ENV['SMTP_FROM'], $_ENV['SMTP_FROM_NAME']);
+            $this->mailer->isHTML(true);
+            
+            error_log("Mailer initialized with host: {$_ENV['SMTP_HOST']}, username: {$_ENV['SMTP_USERNAME']}");
         } catch (Exception $e) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Failed to send email: ' . $mail->ErrorInfo]);
+            error_log("Mailer initialization error: " . $e->getMessage());
+            throw new Exception("Failed to initialize mailer: " . $e->getMessage());
+        }
+    }
+
+    public function sendVerificationEmail($to, $code) {
+        try {
+            error_log("Attempting to send verification email to: $to with code: $code");
+            
+            // Reset mailer state
+            $this->mailer->clearAddresses();
+            $this->mailer->clearAllRecipients();
+            
+            // Set recipient
+            $this->mailer->addAddress($to);
+            $this->mailer->Subject = 'LMS Recovery Analytics - Verification Code';
+            
+            // Create HTML email content
+            $emailContent = "
+                <html>
+                <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+                    <div style='max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9; border-radius: 5px;'>
+                        <h2 style='color: #0d6efd; margin-bottom: 20px;'>Your Verification Code</h2>
+                        <p>Hello,</p>
+                        <p>Your verification code for LMS Recovery Analytics is:</p>
+                        <div style='background-color: #ffffff; padding: 15px; text-align: center; font-size: 32px; 
+                                  font-weight: bold; letter-spacing: 8px; margin: 20px 0; border-radius: 5px; 
+                                  border: 2px solid #e9ecef;'>
+                            {$code}
+                        </div>
+                        <p>This code will expire in 15 minutes.</p>
+                        <p style='color: #666; font-size: 14px; margin-top: 30px;'>
+                            If you didn't request this code, please ignore this email.
+                        </p>
+                    </div>
+                </body>
+                </html>";
+            
+            $this->mailer->Body = $emailContent;
+            $this->mailer->AltBody = "Your verification code is: {$code}. This code will expire in 15 minutes.";
+            
+            // Send email
+            $result = $this->mailer->send();
+            error_log("Email sent successfully to: $to");
+            return true;
+            
+        } catch (Exception $e) {
+            error_log("Failed to send email: " . $e->getMessage());
+            throw new Exception("Failed to send verification email: " . $e->getMessage());
         }
     }
 }
